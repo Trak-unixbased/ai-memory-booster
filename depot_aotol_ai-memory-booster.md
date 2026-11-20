@@ -75,7 +75,7 @@ Ci-dessous figurent :
 
 Ce script remplace l'original pour fonctionner proprement sur **Ubuntu 26.04 LTS `aarch64`** (RK3588 et CIX CD8180) tout en respectant la PEP 668 et `systemd`.
 
-| #!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 
 # ==============================================================================
@@ -195,8 +195,7 @@ fi
 log "Installation terminée avec succès."
 log "Démarrer l'API : npx ai-memory-booster start"
 log "Démarrer l'UI  : cd web/ai-memory-ui && npm run dev"
- |
-| :---- |
+
 
 ## **3\. Fichier de configuration optimisé : `config.json`**
 
