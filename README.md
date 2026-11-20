@@ -1,5 +1,72 @@
 # AI Memory Booster
 
+# AI Memory Booster — Édition ARM64 (Ubuntu 26.04 LTS / Kernel 7)
+
+## 1. À quoi sert ce dépôt ?
+
+**AI Memory Booster** est un module open-source léger, autonome et embarquable permettant de doter un modèle de langage local (LLM via **Ollama**) d'une **mémoire persistante à long terme**.
+
+Il combine :
+- **ChromaDB** comme base de données vectorielle locale (stockage des embeddings et recherche par similarité sémantique).
+- **Ollama** pour l'inférence LLM et la génération d'embeddings sans dépendance cloud.
+- **Un moteur Node.js + API REST + Interface Web** gérant l'injection (`storeMemory`), la récupération (`retrieveMemory`), la consolidation/résumé automatique des conversations, l'oubli ciblé (`forget`) et le chiffrement des données persistantes.
+
+---
+
+## 2. Dans quelles circonstances utiliser le binaire / service ?
+
+Le binaire wrapper `/usr/bin/ai-memory-booster` (et son service `systemd` `ai-memory-booster.service`) est particulièrement pertinent dans les scénarios suivants :
+
+- **Assistant personnel ou métier 100 % hors-ligne (air-gapped / souverain)** : aucune donnée ne quitte la carte SBC ; les échanges et souvenirs vectorisés restent chiffrés localement.
+- **Déploiement sur SBC ARM64 à faible consommation** : fonctionne en continu (24/7) sur une **Orange Pi 5 (RK3588, 32 Go RAM)** ou une **Orange Pi 6 Plus (CIX CD8180)** en serveur de mémoire dédié sur le réseau local.
+- **Couche mémoire découplée via API REST (`http://127.0.0.1:4000`)** : permet à plusieurs clients hétérogènes (scripts Python, bots CLI, interfaces web, agents locaux) de partager la même mémoire long terme sans réimplémenter la logique RAG.
+- **Prototypage rapide** : remplace une stack RAG lourde lorsque le besoin se concentre sur la mémoire conversationnelle persistante et l'apprentissage continu (`learnFromChat: true`).
+
+---
+
+## 3. Pré-requis pour la cross-compilation (Ubuntu 26.04 LTS `x86_64` → `aarch64`)
+
+Cibles matérielles visées : **Rockchip RK3588** (ARMv8.2-A) et **CIX CD8180 / P1** (ARMv9.2-A) sous **Ubuntu 26.04 LTS `aarch64` (Kernel 7)**.
+
+### 3.1 Paquets nécessaires (obligatoires)
+
+| Catégorie | Paquets APT (sur l'hôte `x86_64`) | Rôle |
+|---|---|---|
+| Chaîne de compilation | `gcc-aarch64-linux-gnu`, `g++-aarch64-linux-gnu`, `binutils-aarch64-linux-gnu`, `cpp-aarch64-linux-gnu` | Compilateurs C/C++ et éditeur de liens ciblant `aarch64` |
+| Outils de build | `build-essential`, `make`, `cmake`, `ninja-build`, `pkg-config`, `autoconf`, `automake`, `libtool` | Orchestration des builds C/C++ et addons natifs |
+| Packaging Debian | `dpkg-dev`, `debhelper`, `fakeroot`, `devscripts`, `dh-make` | Création, signature et vérification des paquets `.deb` |
+| Librairies cibles (`arm64`) | `libc6-dev:arm64`, `libstdc++-14-dev:arm64`, `libssl-dev:arm64`, `libsqlite3-dev:arm64`, `zlib1g-dev:arm64` | Headers et bibliothèques de linkage pour `aarch64` |
+| Runtime Node / Python | `nodejs`, `npm`, `python3`, `python3-venv`, `python3-dev` | Build des dépendances JS (`node-gyp`) et scripts |
+
+### 3.2 Paquets utiles (fortement recommandés)
+
+| Paquets APT | Rôle |
+|---|---|
+| `qemu-user-static`, `binfmt-support` | Exécuter de manière transparente des binaires `aarch64` sur l'hôte `x86_64` (tests unitaires Jest, `npm`, vérification post-build) |
+| `ccache` | Accélère drastiquement les recompilations C/C++ successives |
+| `crossbuild-essential-arm64` | Méta-paquet regroupant les outils de cross-build Debian/Ubuntu pour `arm64` |
+| `lintian` | Audit de conformité des paquets `.deb` générés |
+| `patchelf`, `file`, `readelf` (`binutils`) | Vérification de l'architecture ELF (`ARM aarch64`) et des `RPATH`/dépendances dynamiques |
+
+### 3.3 Paquets optionnels (avancés / accélération matérielle)
+
+| Paquets / Outils | Rôle |
+|---|---|
+| `clang`, `lld`, `llvm` | Alternative à GCC avec meilleur support natif ARMv9.2-A / SVE2 (CIX CD8180) |
+| `sbuild`, `mmdebstrap`, `schroot` | Construction reproductible en chroot propre `ubuntu-26.04-arm64` |
+| `rustc`, `cargo` (+ cible `aarch64-unknown-linux-gnu`) | Requis uniquement si vous recompilez depuis les sources les bindings Rust de ChromaDB (`tokenizers`, `chroma-hnswlib`) |
+| `libvulkan-dev:arm64`, `glslang-tools` | Utile pour cross-compiler `llama.cpp` / backend Vulkan sur Mali-G610 (RK3588) ou Immortalis-G720 (CD8180) |
+
+---
+
+## 4. Installation de l'environnement de cross-compilation (`x86_64` → `aarch64`)
+
+### Étape 1 : Activer l'architecture `arm64` (Multiarch)
+
+```bash
+sudo dpkg --add-architecture arm64
+
+
 **AI Memory Booster** is an AI-powered memory enhancement module that enables **long-term AI memory** and retrieval of conversations using embeddings and vector databases.
 
 **Online demo** [https://aimemorybooster.com](https://aimemorybooster.com)
