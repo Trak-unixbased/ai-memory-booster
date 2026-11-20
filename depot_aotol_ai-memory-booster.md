@@ -1,8 +1,4 @@
-
-
-J'ai consulté la page principale du dépôt aotol/ai-memory-booster, son arborescence racine, ses métadonnées ainsi que l'intégralité de son README.md.
-
-**Précision sur le périmètre de lecture :** Je n'ai pas accès en navigation automatique au contenu interne des fichiers situés dans les sous-dossiers (core/, server/, web/ai-memory-ui/, \_\_tests\_\_/). L'analyse ci-dessous repose donc sur la documentation complète et la structure exposée à la racine du dépôt. Si tu souhaites un audit détaillé du code source d'un module précis, tu peux me fournir les URL directes des fichiers ou coller leur contenu.
+#     ai-memory-booster how to install
 
 ## **1\. Vue d'ensemble du projet**
 
