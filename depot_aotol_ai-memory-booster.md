@@ -75,7 +75,127 @@ Ci-dessous figurent :
 
 Ce script remplace l'original pour fonctionner proprement sur **Ubuntu 26.04 LTS `aarch64`** (RK3588 et CIX CD8180) tout en respectant la PEP 668 et `systemd`.
 
-| \#\!/usr/bin/env bash set \-euo pipefail \# \============================================================================== \# install.sh \- Installation corrigée pour Ubuntu 26.04 LTS aarch64 (Kernel 7\) \# Cibles validées : Orange Pi 5 (RK3588 32 Go) & Orange Pi 6 Plus (CIX CD8180) \# \============================================================================== APP\_NAME="ai-memory-booster" INSTALL\_DIR="\${INSTALL\_DIR:-\$(pwd)}" VENV\_DIR="\${INSTALL\_DIR}/.venv" CHROMA\_DATA\_DIR="\${CHROMA\_DATA\_DIR:-\${INSTALL\_DIR}/chroma\_db}" API\_PORT="\${API\_PORT:-4000}" CHROMA\_PORT="\${CHROMA\_PORT:-8000}" OLLAMA\_MODEL="\${OLLAMA\_MODEL:-llama3.2}" log()  { printf "\\033\[1;34m\[INFO\]\\033\[0m %s\\n" "\$\*"; } warn() { printf "\\033\[1;33m\[WARN\]\\033\[0m %s\\n" "\$\*"; } err()  { printf "\\033\[1;31m\[ERR \]\\033\[0m %s\\n" "\$\*" \>&2; exit 1; } ARCH="\$(uname \-m)" KERNEL="\$(uname \-r)" log "Architecture détectée : \${ARCH} \| Kernel : \${KERNEL}" if \[\[ "$ARCH"!="aarch64"&&"${ARCH}" \!= "x86\_64" \]\]; then     err "Architecture non supportée : \${ARCH}" fi \# 1\. Vérification des dépendances système Ubuntu 26.04 log "Vérification des prérequis système..." REQUIRED\_CMDS=(curl git node npm python3) MISSING\_PKGS=() for cmd in "\${REQUIRED\_CMDS\[@\]}"; do     if \! command \-v "\${cmd}" \>/dev/null 2\>&1; then         MISSING\_PKGS+=("\${cmd}")     fi done if \[\[ \${\#MISSING\_PKGS\[@\]} \-gt 0 \]\]; then     warn "Commandes manquantes : \${MISSING\_PKGS\[\*\]}"     log "Installation via apt (sudo requis)..."     sudo apt-get update     sudo apt-get install \-y \\         curl git ca-certificates build-essential pkg-config \\         python3 python3-venv python3-dev libsqlite3-dev \\         nodejs npm fi \# Vérification version Node.js (\>= 20 recommandé pour Ubuntu 26.04 / OpenSSL 3\) NODE\_MAJOR="\$(node \-v \| sed \-E 's/^v(\[0-9\]+).\*/\\1/')" if (( NODE\_MAJOR \< 20 )); then     warn "Node.js v\${NODE\_MAJOR} détecté. Node.js \>= 20 LTS est fortement recommandé." fi \# 2\. Installation d'Ollama (binaire officiel ARM64/x86\_64) if \! command \-v ollama \>/dev/null 2\>&1; then     log "Installation d'Ollama..."     curl \-fsSL https\://ollama.com/install.sh \| sh else     log "Ollama déjà installé : \$(ollama \--version)" fi \# 3\. Installation de ChromaDB dans un venv Python (contourne PEP 668 Ubuntu 26.04) if \[\[ \! \-d "\${VENV\_DIR}" \]\]; then     log "Création de l'environnement virtuel Python : \${VENV\_DIR}"     python3 \-m venv "\${VENV\_DIR}" fi log "Installation / mise à jour de ChromaDB dans le venv..." "\${VENV\_DIR}/bin/pip" install \--upgrade pip wheel setuptools "\${VENV\_DIR}/bin/pip" install \--upgrade chromadb mkdir \-p "\${CHROMA\_DATA\_DIR}" \# 4\. Installation des dépendances Node.js (API \+ UI) log "Installation des dépendances NPM du projet principal..." cd "\${INSTALL\_DIR}" export npm\_config\_build\_from\_source=false if \[\[ "\${ARCH}" \== "aarch64" \]\]; then     export npm\_config\_arch=arm64     export npm\_config\_target\_arch=arm64 fi npm install if \[\[ \-d "\${INSTALL\_DIR}/web/ai-memory-ui" \]\]; then     log "Configuration et installation de l'interface web (ai-memory-ui)..."     cat \> "\${INSTALL\_DIR}/web/ai-memory-ui/.env.local" \<\<EOF AI\_MEMORY\_BOOSTER\_API\_URL=http\://localhost:\${API\_PORT} EOF     (         cd "\${INSTALL\_DIR}/web/ai-memory-ui"         npm install     ) fi \# 5\. Téléchargement du modèle Ollama si le service répond if systemctl is-active \--quiet ollama 2\>/dev/null \|\| pgrep \-x ollama \>/dev/null 2\>&1; then     log "Pré-téléchargement du modèle Ollama : \${OLLAMA\_MODEL}"     ollama pull "\${OLLAMA\_MODEL}" \|\| warn "Impossible de télécharger \${OLLAMA\_MODEL} (mode hors-ligne ?)." else     warn "Le démon Ollama n'est pas actif. Lancez 'sudo systemctl start ollama' puis 'ollama pull \${OLLAMA\_MODEL}'." fi \# 6\. Lancement de ChromaDB si non démarré if \! ss \-tln 2\>/dev/null \| grep \-q ":\${CHROMA\_PORT} "; then     log "Démarrage de ChromaDB sur le port \${CHROMA\_PORT} (stockage : \${CHROMA\_DATA\_DIR})..."     nohup "\${VENV\_DIR}/bin/chroma" run \\         \--host 127.0.0.1 \\         \--port "\${CHROMA\_PORT}" \\         \--path "\${CHROMA\_DATA\_DIR}" \\         \> "\${INSTALL\_DIR}/chromadb.log" 2\>&1 &     sleep 2 else     log "ChromaDB écoute déjà sur le port \${CHROMA\_PORT}." fi log "Installation terminée avec succès." log "Démarrer l'API : npx ai-memory-booster start" log "Démarrer l'UI  : cd web/ai-memory-ui && npm run dev"  |
+| #!/usr/bin/env bash
+set -euo pipefail
+
+# ==============================================================================
+# install.sh - Installation corrigée pour Ubuntu 26.04 LTS aarch64 (Kernel 7)
+# Cibles validées : Orange Pi 5 (RK3588 32 Go) & Orange Pi 6 Plus (CIX CD8180)
+# ==============================================================================
+
+APP_NAME="ai-memory-booster"
+INSTALL_DIR="${INSTALL_DIR:-$(pwd)}"
+VENV_DIR="${INSTALL_DIR}/.venv"
+CHROMA_DATA_DIR="${CHROMA_DATA_DIR:-${INSTALL_DIR}/chroma_db}"
+API_PORT="${API_PORT:-4000}"
+CHROMA_PORT="${CHROMA_PORT:-8000}"
+OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2}"
+
+log()  { printf "\033[1;34m[INFO]\033[0m %s\n" "$*"; }
+warn() { printf "\033[1;33m[WARN]\033[0m %s\n" "$*"; }
+err()  { printf "\033[1;31m[ERR ]\033[0m %s\n" "$*" >&2; exit 1; }
+
+ARCH="$(uname -m)"
+KERNEL="$(uname -r)"
+log "Architecture détectée : ${ARCH} | Kernel : ${KERNEL}"
+
+if [[ "ARCH"!="aarch64"&&"{ARCH}" != "x86_64" ]]; then
+    err "Architecture non supportée : ${ARCH}"
+fi
+
+# 1. Vérification des dépendances système Ubuntu 26.04
+log "Vérification des prérequis système..."
+REQUIRED_CMDS=(curl git node npm python3)
+MISSING_PKGS=()
+
+for cmd in "${REQUIRED_CMDS[@]}"; do
+    if ! command -v "${cmd}" >/dev/null 2>&1; then
+        MISSING_PKGS+=("${cmd}")
+    fi
+done
+
+if [[ ${#MISSING_PKGS[@]} -gt 0 ]]; then
+    warn "Commandes manquantes : ${MISSING_PKGS[*]}"
+    log "Installation via apt (sudo requis)..."
+    sudo apt-get update
+    sudo apt-get install -y \
+        curl git ca-certificates build-essential pkg-config \
+        python3 python3-venv python3-dev libsqlite3-dev \
+        nodejs npm
+fi
+
+# Vérification version Node.js (>= 20 recommandé pour Ubuntu 26.04 / OpenSSL 3)
+NODE_MAJOR="$(node -v | sed -E 's/^v([0-9]+).*/\1/')"
+if (( NODE_MAJOR < 20 )); then
+    warn "Node.js v${NODE_MAJOR} détecté. Node.js >= 20 LTS est fortement recommandé."
+fi
+
+# 2. Installation d'Ollama (binaire officiel ARM64/x86_64)
+if ! command -v ollama >/dev/null 2>&1; then
+    log "Installation d'Ollama..."
+    curl -fsSL https://ollama.com/install.sh | sh
+else
+    log "Ollama déjà installé : $(ollama --version)"
+fi
+
+# 3. Installation de ChromaDB dans un venv Python (contourne PEP 668 Ubuntu 26.04)
+if [[ ! -d "${VENV_DIR}" ]]; then
+    log "Création de l'environnement virtuel Python : ${VENV_DIR}"
+    python3 -m venv "${VENV_DIR}"
+fi
+
+log "Installation / mise à jour de ChromaDB dans le venv..."
+"${VENV_DIR}/bin/pip" install --upgrade pip wheel setuptools
+"${VENV_DIR}/bin/pip" install --upgrade chromadb
+
+mkdir -p "${CHROMA_DATA_DIR}"
+
+# 4. Installation des dépendances Node.js (API + UI)
+log "Installation des dépendances NPM du projet principal..."
+cd "${INSTALL_DIR}"
+export npm_config_build_from_source=false
+if [[ "${ARCH}" == "aarch64" ]]; then
+    export npm_config_arch=arm64
+    export npm_config_target_arch=arm64
+fi
+npm install
+
+if [[ -d "${INSTALL_DIR}/web/ai-memory-ui" ]]; then
+    log "Configuration et installation de l'interface web (ai-memory-ui)..."
+    cat > "${INSTALL_DIR}/web/ai-memory-ui/.env.local" <<EOF
+AI_MEMORY_BOOSTER_API_URL=http://localhost:${API_PORT}
+EOF
+    (
+        cd "${INSTALL_DIR}/web/ai-memory-ui"
+        npm install
+    )
+fi
+
+# 5. Téléchargement du modèle Ollama si le service répond
+if systemctl is-active --quiet ollama 2>/dev/null || pgrep -x ollama >/dev/null 2>&1; then
+    log "Pré-téléchargement du modèle Ollama : ${OLLAMA_MODEL}"
+    ollama pull "${OLLAMA_MODEL}" || warn "Impossible de télécharger ${OLLAMA_MODEL} (mode hors-ligne ?)."
+else
+    warn "Le démon Ollama n'est pas actif. Lancez 'sudo systemctl start ollama' puis 'ollama pull ${OLLAMA_MODEL}'."
+fi
+
+# 6. Lancement de ChromaDB si non démarré
+if ! ss -tln 2>/dev/null | grep -q ":${CHROMA_PORT} "; then
+    log "Démarrage de ChromaDB sur le port ${CHROMA_PORT} (stockage : ${CHROMA_DATA_DIR})..."
+    nohup "${VENV_DIR}/bin/chroma" run \
+        --host 127.0.0.1 \
+        --port "${CHROMA_PORT}" \
+        --path "${CHROMA_DATA_DIR}" \
+        > "${INSTALL_DIR}/chromadb.log" 2>&1 &
+    sleep 2
+else
+    log "ChromaDB écoute déjà sur le port ${CHROMA_PORT}."
+fi
+
+log "Installation terminée avec succès."
+log "Démarrer l'API : npx ai-memory-booster start"
+log "Démarrer l'UI  : cd web/ai-memory-ui && npm run dev"
+ |
 | :---- |
 
 ## **3\. Fichier de configuration optimisé : `config.json`**
