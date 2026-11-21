@@ -76,7 +76,7 @@ Ci-dessous figurent :
 Ce script remplace l'original pour fonctionner proprement sur **Ubuntu 26.04 LTS `aarch64`** (RK3588 et CIX CD8180) tout en respectant la PEP 668 et `systemd`.
 <code>
 #!/usr/bin/env bash
-set -euo pipefail
+set -euo pipefail</code>
 
 <code># ==============================================================================</code>
 <code># install.sh - Installation corrigée pour Ubuntu 26.04 LTS aarch64 (Kernel 7)</code>
@@ -90,20 +90,20 @@ CHROMA_DATA_DIR="${CHROMA_DATA_DIR:-${INSTALL_DIR}/chroma_db}"
 API_PORT="${API_PORT:-4000}"
 CHROMA_PORT="${CHROMA_PORT:-8000}"
 OLLAMA_MODEL="${OLLAMA_MODEL:-llama3.2}"</code>
-
+<code>
 log()  { printf "\033[1;34m[INFO]\033[0m %s\n" "$*"; }
 warn() { printf "\033[1;33m[WARN]\033[0m %s\n" "$*"; }
-err()  { printf "\033[1;31m[ERR ]\033[0m %s\n" "$*" >&2; exit 1; }
-
+err()  { printf "\033[1;31m[ERR ]\033[0m %s\n" "$*" >&2; exit 1; }</code>
+<code>
 ARCH="$(uname -m)"
 KERNEL="$(uname -r)"
-log "Architecture détectée : ${ARCH} | Kernel : ${KERNEL}"
+log "Architecture détectée : ${ARCH} | Kernel : ${KERNEL}"</code>
 
 if [[ "ARCH"!="aarch64"&&"{ARCH}" != "x86_64" ]]; then
     err "Architecture non supportée : ${ARCH}"
 fi
 
-# 1. Vérification des dépendances système Ubuntu 26.04
+<code># 1. Vérification des dépendances système Ubuntu 26.04</code>
 log "Vérification des prérequis système..."
 REQUIRED_CMDS=(curl git node npm python3)
 MISSING_PKGS=()
@@ -149,7 +149,7 @@ log "Installation / mise à jour de ChromaDB dans le venv..."
 "${VENV_DIR}/bin/pip" install --upgrade chromadb
 
 mkdir -p "${CHROMA_DATA_DIR}"
-
+<code>
 # 4. Installation des dépendances Node.js (API + UI)
 log "Installation des dépendances NPM du projet principal..."
 cd "${INSTALL_DIR}"
@@ -158,8 +158,8 @@ if [[ "${ARCH}" == "aarch64" ]]; then
     export npm_config_arch=arm64
     export npm_config_target_arch=arm64
 fi
-npm install
-
+npm install</code>
+<code>
 if [[ -d "${INSTALL_DIR}/web/ai-memory-ui" ]]; then
     log "Configuration et installation de l'interface web (ai-memory-ui)..."
     cat > "${INSTALL_DIR}/web/ai-memory-ui/.env.local" <<EOF
@@ -170,7 +170,7 @@ EOF
         npm install
     )
 fi
-
+</code>
 <code># 5. Téléchargement du modèle Ollama si le service répond</code>
 if systemctl is-active --quiet ollama 2>/dev/null || pgrep -x ollama >/dev/null 2>&1; then
     log "Pré-téléchargement du modèle Ollama : ${OLLAMA_MODEL}"
